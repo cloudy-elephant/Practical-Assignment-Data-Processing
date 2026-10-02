@@ -1,4 +1,4 @@
-# Financial Document RAG Pipeline
+# Document RAG Pipeline
 
 [English version](README.md)
 
