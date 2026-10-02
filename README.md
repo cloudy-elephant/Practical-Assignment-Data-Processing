@@ -1,4 +1,4 @@
-#Document RAG Pipeline
+# Document RAG Pipeline
 
 [中文版本](README_CN.md)
 
