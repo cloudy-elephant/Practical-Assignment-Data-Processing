@@ -1,0 +1,4 @@
+services:
+  standalone:
+    volumes:
+      - ./user.yaml:/milvus/configs/user.yaml:ro

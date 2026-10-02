@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+embeddings/
+index_manifests/
+retrieval_traces/
+reranking_traces/
+milvus3-local/volumes/

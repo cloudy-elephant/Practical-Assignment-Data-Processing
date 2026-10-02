@@ -1,0 +1,38 @@
+# Financial-document RAG pipeline (Python 3.11)
+# Install a CUDA-compatible PyTorch >=2.6 build first on the course Linux GPU machine
+# (required by Transformers 4.57.6 to load BGE-M3's pinned .bin checkpoint).
+# On Intel macOS, PyTorch 2.2.2 is the last available x86_64 wheel; use CPU for local smoke checks.
+torch==2.2.2; sys_platform == "darwin" and platform_machine == "x86_64"
+
+# Existing PDF extraction / OCR preprocessing
+PyMuPDF==1.28.2
+pytesseract==0.3.13
+Pillow>=10.0,<12.0
+numpy>=1.26,<2.0
+pandas>=2.2,<3.0
+pydash>=7.0,<9.0
+
+# Chunking and document representation
+langchain-core>=0.3,<2.0
+langchain-text-splitters>=0.3,<2.0
+tiktoken>=0.7,<1.0
+
+# BGE-M3, Qwen3-Embedding, and Qwen3-Reranker
+FlagEmbedding==1.4.2
+sentence-transformers==5.7.0
+transformers==4.57.6
+accelerate>=1.0,<2.0
+
+# Milvus 3.0 client: HNSW, SINDI, BM25, and hybrid search
+pymilvus==3.0.2
+
+# RAG generation endpoint and optional Gemini Embedding 2
+openai>=1.0,<3.0
+google-genai>=2.0,<3.0
+
+# Configuration, notebooks, and basic verification
+python-dotenv>=1.0,<2.0
+PyYAML>=6.0,<7.0
+ipykernel>=6.0,<8.0
+jupyterlab>=4.0,<5.0
+pytest>=8.0,<10.0
