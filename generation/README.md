@@ -24,3 +24,13 @@ answer, citations, selected evidence, model settings and upstream checksums.
 
 The notebook requires an existing Milvus index manifest and access to the
 matching embedding and reranking model weights. It does not create an index.
+
+The root [eight-question notebook](../financial_rag_assignment_8_questions.ipynb)
+imports `generation.exercises.RAGPipeline`. Question answering always uses fused
+retrieval, fixed reranking, and this stage's `prepare_answer` / `generate` functions
+for prompt previews and answers. Multiple queries fuse into one bounded candidate
+set before reranking. Manual selection can only select/reorder the reranked
+evidence, and the answer question is saved alongside the retrieval question.
+Use `retrieval_only=True` for dense/BM25/sparse/fused comparison views; these
+comparison bundles cannot be used for generation. `document_id` accepts one
+string or `None`, not a list.

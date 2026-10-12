@@ -60,8 +60,8 @@ def _index_manifest(path: Path) -> tuple[dict, str]:
 def _filter(document_id: str | None, page: int | None) -> str:
     conditions = []
     if document_id is not None:
-        if not document_id or len(document_id.encode("utf-8")) > 512:
-            raise ValueError("document_id must be nonempty and <= 512 bytes")
+        if not isinstance(document_id, str) or not document_id or len(document_id.encode("utf-8")) > 512:
+            raise ValueError("document_id must be a nonempty string of <= 512 bytes, or None")
         conditions.append(f"document_id == {json.dumps(document_id, ensure_ascii=False)}")
     if page is not None:
         if page <= 0:
@@ -217,6 +217,52 @@ def retrieve(index_manifest_path: str | Path, question: str, output_dir: str | P
     finally:
         if owned_client:
             client.close()
+
+
+def merge_traces(trace_paths: list[str | Path], output_dir: str | Path, *,
+                 candidate_limit: int = 20, rrf_k: int = 60) -> dict:
+    """Fuse all sub-query/path ranks into one bounded, traceable candidate set."""
+    if not trace_paths:
+        raise ValueError("At least one retrieval trace is required")
+    traces, sources = [], []
+    for path in trace_paths:
+        source = Path(path)
+        raw = source.read_bytes()
+        trace = json.loads(raw)
+        if (trace.get("schema_version") != TRACE_VERSION or trace.get("status") != "complete"
+                or trace.get("stage") != "retrieval" or not trace.get("question", "").strip()):
+            raise ValueError("Expected complete retrieval-v1 traces")
+        traces.append(trace)
+        sources.append({"trace_path": str(source.resolve()), "trace_sha256": sha256(raw).hexdigest(),
+                        "question": trace["question"]})
+    first = traces[0]
+    shared = ("collection", "index_manifest_path", "index_manifest_sha256", "model_id",
+              "model_revision", "document_filter", "page_filter", "filter_expression",
+              "path_limit", "hnsw_ef", "rrf_k")
+    if any(any(trace[key] != first[key] for key in shared) for trace in traces):
+        raise ValueError("Sub-query traces must use the same index, model, filters and retrieval settings")
+    _, manifest_sha = _index_manifest(Path(first["index_manifest_path"]))
+    if manifest_sha != first["index_manifest_sha256"]:
+        raise ValueError("Index manifest checksum differs from retrieval traces")
+    paths = {f"query_{number}/{name}": {**path, "question": trace["question"]}
+             for number, trace in enumerate(traces, 1) for name, path in trace["paths"].items()}
+    candidates = fuse({name: path["hits"] for name, path in paths.items()},
+                      rrf_k=rrf_k, limit=candidate_limit)
+    trace = {**{key: first[key] for key in shared}, "schema_version": TRACE_VERSION,
+             "status": "complete", "stage": "retrieval",
+             "question": "\n".join(item["question"] for item in traces),
+             "candidate_limit": candidate_limit, "rrf_k": rrf_k,
+             "subquery_traces": sources, "paths": paths, "fused_candidates": candidates,
+             "elapsed_seconds": sum(item["elapsed_seconds"] for item in traces)}
+    destination = Path(output_dir) / first["collection"] / f"merged_{time_ns()}.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".trace_", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(_canonical(trace) + b"\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, destination)
+    return {**trace, "trace_path": str(destination.resolve())}
 
 
 def main() -> None:

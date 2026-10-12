@@ -1,3 +1,11 @@
+# BGE-M3's SINDI path requires vector index version >= 10 on the server.
+# Recreate an existing local Milvus container after changing this file.
 dataCoord:
   targetVecIndexVersion: 10
   targetScalarIndexVersion: 4
+
+# Milvus defaults to 1024 rows per segment. This assignment has few documents,
+# so allow index construction for every non-empty segment in local experiments.
+indexCoord:
+  segment:
+    minSegmentNumRowsToEnableIndex: 1

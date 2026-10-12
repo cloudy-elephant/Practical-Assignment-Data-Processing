@@ -8,6 +8,8 @@
 
 ## 快速开始：配置环境与 Milvus
 
+**Windows 用户：**先完成下方 [Windows：通过 WSL2 使用](#windows通过-wsl2-使用)，再在 Ubuntu 中执行本节的 Linux 命令。
+
 以下命令从**仓库根目录**运行。先按官方说明安装 [Conda](https://docs.conda.io/projects/conda/en/latest/)、[Ubuntu Docker Engine 与 Compose](https://docs.docker.com/engine/install/ubuntu/) 或 [macOS Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/)，并启动 Docker。再根据操作系统选择一组 Tesseract 英文语言数据安装命令：
 
 Ubuntu / Debian：
@@ -21,11 +23,12 @@ macOS + Homebrew：
 brew install tesseract
 ```
 
-创建 Python 3.11 环境：
+若尚未创建 `assignment` 环境，先创建 Python 3.11 环境，再激活；已有环境可直接激活：
 
 ```bash
-conda create -n financial-rag python=3.11 -y
-conda activate financial-rag
+# 已有 assignment 环境时跳过创建命令。
+conda create -n assignment python=3.11 -y
+conda activate assignment
 ```
 
 在安装项目依赖前，按设备选择一条 PyTorch 命令。
@@ -63,6 +66,45 @@ export MILVUS_URI=http://127.0.0.1:19530
 
 首次运行需要下载固定版本的 tokenizer 和模型权重。若使用远程 Milvus，请将 `MILVUS_URI` 改为服务地址，并按需设置 `MILVUS_TOKEN`、`MILVUS_DB_NAME`。
 
+## Windows：通过 WSL2 使用
+
+Windows 用户可通过 WSL2＋Ubuntu 复用 Linux 流程。README 样例使用 Bash 语法（`export`、`$(...)`、`set -euo pipefail`）；原生 PowerShell/CMD 安装流程尚未编写和验证。以下 WSL2 步骤也尚未在 Windows 机器上做端到端实测。本地模型安装路线面向 x86_64，Windows ARM 需要另行验证依赖。
+
+**1. 安装 WSL2 和 Ubuntu。**以管理员身份打开 PowerShell，按 [Microsoft WSL 安装说明](https://learn.microsoft.com/en-us/windows/wsl/install)执行：
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+按提示重启，首次打开 Ubuntu 并创建 Linux 用户。随后在 PowerShell 中执行：
+
+```powershell
+wsl --update
+wsl -l -v
+```
+
+确认 Ubuntu 的 `VERSION` 是 `2`；若是 `1`，先执行 `wsl --set-version Ubuntu 2`。
+
+**2. 启用 Docker Desktop 集成。**安装并启动 [Windows Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)，Windows 版本需满足其当前系统要求。启用 WSL2 引擎，在 **Settings → Resources → WSL Integration** 中启用 Ubuntu，并应用设置；使用 Linux containers。具体见 [Docker WSL2 说明](https://docs.docker.com/desktop/features/wsl/)。此路线由 Docker Desktop 提供引擎，跳过上方单独安装 Ubuntu Docker Engine 的步骤。
+
+**3. 在 Ubuntu 内准备项目。**从 Windows Terminal 打开 Ubuntu，或在 PowerShell 中执行 `wsl -d Ubuntu`。将仓库克隆或复制到 Linux 文件系统，例如 `~/projects/Practical-Assignment-Data-Processing`，使 Docker 挂载目录和运行产物也位于其中。在 Ubuntu 内安装 **Linux 版 Conda**，脚本与 Notebook 均使用此处的 Python 环境。
+
+在 Ubuntu 的 Bash 终端执行：
+
+```bash
+cd ~/projects/Practical-Assignment-Data-Processing
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr tesseract-ocr-eng curl
+docker version
+docker compose version
+```
+
+`docker version` 应同时显示客户端和服务端信息。若服务端不可用，检查 Docker Desktop 是否启动，以及 Ubuntu 集成是否启用。
+
+**4. 接着执行 Linux 快速开始。**按上方步骤创建并激活 Python 3.11 Conda 环境，先安装 PyTorch，再安装 `requirement.txt`，然后启动 Milvus。后续所有 `bash` 样例都在 Ubuntu 终端执行。没有兼容 NVIDIA GPU 时使用 Linux CPU 版 PyTorch，模型推理会较慢；使用 CUDA 时，在 Windows 上安装兼容的 NVIDIA 驱动，参考 [NVIDIA CUDA on WSL 说明](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)，选择与驱动兼容的 Linux PyTorch CUDA 安装命令，并用 `torch.cuda.is_available()` 检查后再运行 GPU 推理。
+
+进入 WSL2 后，流程命令和 `MILVUS_URI=http://127.0.0.1:19530` 与 Linux 样例相同。若本机算力不足，可在课程 Linux GPU 服务器运行整个流程；仅设置远程 Milvus 地址只会迁移数据库，嵌入和重排仍在运行 Python 的机器上执行。
+
 ## 一条完整样例：PDF 到检索结果
 
 这条路线固定使用 `data/financial/ATSAR2023+bursa.pdf`、`layout_paragraph` 切块、`qwen3-0.6b` 嵌入、Milvus HNSW/COSINE＋BM25 检索，以及 `Qwen/Qwen3-Reranker-0.6B` 重排。环境配置完成后，在**同一个终端**依次运行下列命令。脚本从各阶段的 JSON 输出自动读取下一阶段所需路径，最后打印融合检索候选和前 5 条重排证据。
@@ -93,7 +135,7 @@ RERANKING_TRACE_PATH=$(python -c 'import json,sys; print(json.load(open(sys.argv
 python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["selected_evidence"], ensure_ascii=False, indent=2))' "$RERANKING_TRACE_PATH"
 ```
 
-`fused_candidates` 是 RRF 融合后的检索结果，`selected_evidence` 是重排后可用于生成回答的证据。完整记录分别保存在 `RETRIEVAL_TRACE_PATH` 和 `RERANKING_TRACE_PATH`。本样例停在证据选择阶段，因此无需配置聊天接口；如需生成答案，继续阅读下方“对一条问题执行问答”。索引阶段会核验 Milvus 中的物理索引；[Milvus 对小数据集可能不建立物理索引](https://milvus.io/docs/performance_faq.md)。若样本文档的数据量不足，应增加输入文档后重新建库，不能把 `--dry-run` 当作建库成功。
+`fused_candidates` 是 RRF 融合后的检索结果，`selected_evidence` 是重排后可用于生成回答的证据。完整记录分别保存在 `RETRIEVAL_TRACE_PATH` 和 `RERANKING_TRACE_PATH`。本样例停在证据选择阶段，因此无需配置聊天接口；如需生成答案，继续阅读下方“对一条问题执行问答”。由于本作业文档数量较少，本地 Milvus 配置将建索引阈值从默认的每个 segment 1024 行降低为 1 行。索引阶段校验 Milvus 返回的配置、进度和读回数据，不独立核验物理索引文件；不能把 `--dry-run` 当作建库成功。
 
 ## 完整流程
 
@@ -122,7 +164,7 @@ python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["selec
 | [`retrieval/`](retrieval/README.md) | 多路搜索并用 RRF 融合 | retrieval trace |
 | [`reranking/`](reranking/README.md) | 固定重排模型打分并选证据 | reranking trace |
 | [`generation/`](generation/README.md) | 调用聊天接口并保存引用和答案 | generation trace |
-| `tests/` | 各阶段的单元测试和模拟依赖测试 | 测试结果 |
+| [`financial_rag_assignment_8_questions.ipynb`](financial_rag_assignment_8_questions.ipynb) | 八道财报 RAG 练习，包含检索、证据选择、提示词预览和模型对比 | 提示词预览、generation trace、对比结果 |
 
 ### 模型与检索路径
 
@@ -136,6 +178,7 @@ python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["selec
 ## 环境补充说明
 
 - 依赖文件是 [`requirement.txt`](requirement.txt)（单数）。完整模型推理建议使用 Linux GPU 环境；离线运行时需预先缓存固定 revision 的权重和 tokenizer，并加上 `--local-files-only`。
+- 依赖清单覆盖已实现的主流程、Notebook 工具和测试。Gemini 是尚未实现适配器的后续扩展；pandas、PyYAML 等包仍可能作为 Milvus 或 Transformers 的间接依赖安装。
 - OCR 需要系统安装 Tesseract 和英文语言数据。`--ocr auto` 默认只处理提取字符少于 40 的页面；电子 PDF 可先用 `--ocr never` 检查。
 - 索引与检索需要可访问的 **Milvus 3.x** 服务。本地可用 `milvus3-local/docker-compose.yaml` 启动；默认连接 `http://127.0.0.1:19530`，远程服务可用 `MILVUS_URI` 覆盖。BGE-M3 的 SINDI 路线还要求服务端 `dataCoord.targetVecIndexVersion >= 10`，需要服务管理员确认。
 - 生成需要 OpenAI 兼容的 chat endpoint 和模型名。密钥由环境变量提供，不会写进产物。
@@ -173,7 +216,7 @@ python -m embedding.build artifacts/chunks/layout_paragraph/chunks.jsonl embeddi
 
 `--limit 1` 可运行真实模型的单 chunk smoke test；它不是整份报告的完整索引。中断后重跑同一配置会复用已校验记录。只有 `manifest.json` 的 `status` 为 `complete` 且文件校验值匹配，才能进入索引阶段。
 
-**4. 建 Milvus 索引。** 先用 `--dry-run` 离线检查嵌入产物和建库计划。接入 Milvus 后，程序为不同嵌入产物及索引设置创建隔离的 collection，按 `chunk_id` upsert，并核验物理索引描述、已索引行数及读回数据。命令输出的 `index_manifest_path` 是问答入口。
+**4. 建 Milvus 索引。** 先用 `--dry-run` 离线检查嵌入产物和建库计划。接入 Milvus 后，程序为不同嵌入产物及索引设置创建隔离的 collection，按 `chunk_id` upsert，并核验 Milvus 返回的索引配置、构建状态、已索引行数，以及读回的 chunk ID 和内容哈希。命令输出的 `index_manifest_path` 是问答入口。
 
 ```bash
 python -m indexing.build PATH/TO/embeddings.jsonl index_manifests --dry-run
@@ -184,11 +227,29 @@ python -m indexing.build PATH/TO/embeddings.jsonl index_manifests --dry-run
 python -m indexing.build PATH/TO/embeddings.jsonl index_manifests
 ```
 
-使用 **BGE-M3** 时，管理员确认服务端索引版本至少为 10 后，建库命令还需加 `--target-vec-index-version 10`。该参数只记录已确认的设置，**不会修改 Milvus 服务配置**。数据量过小而无法形成可核验的物理索引时，程序不会生成 `complete` 的索引 manifest。
+Milvus 的 [`indexCoord.segment.minSegmentNumRowsToEnableIndex`](https://milvus.io/docs/configure_indexcoord.md) 默认值为**每个 segment 1024 行**，不是每个 collection 的总行数。由于本作业文档数量较少，[`milvus3-local/user.yaml`](milvus3-local/user.yaml) 将该阈值降低为**每个 segment 1 行**，使小 segment 也能构建索引，同时保留当前 indexing 方法。同一文件还为 BGE-M3 的 SINDI 路线设置了 `dataCoord.targetVecIndexVersion: 10`。主 [`docker-compose.yaml`](milvus3-local/docker-compose.yaml) 直接将其挂载到 `/milvus/configs/user.yaml`，使用 `-f milvus3-local/docker-compose.yaml` 启动也会包含该挂载，无需 override 文件。远程服务需由管理员单独配置，`indexing.build` 不会修改服务端设置。
+
+如果本地服务已经运行，重新创建 Milvus 容器以应用配置：
+
+```bash
+docker compose -f milvus3-local/docker-compose.yaml up -d --force-recreate --wait standalone
+```
+
+对于调整阈值前创建的 collection，使用新的 `--collection-prefix`（例如 `assignment_small`）建库，避免复用此前已标记完成的索引任务。`complete` manifest 表示 API 检查和数据回读通过。Milvus 可能将跳过建索引的小 segment 标记为 `Finished`，并将其行数计入已索引行数，因此 manifest 本身不能证明物理索引已生成。比较索引类型或参数前，还需单独核验相关 segment 的索引文件及加载状态。
+
+使用 **BGE-M3** 时，确认运行中的服务端已应用 `dataCoord.targetVecIndexVersion >= 10`，再执行：
+
+```bash
+python -m indexing.build PATH/TO/BGE_M3/embeddings.jsonl index_manifests --target-vec-index-version 10
+```
+
+该参数只记录管理员已确认的设置，**不会修改或自动核验 Milvus 服务配置**。本地 `user.yaml` 已提供该设置，但已有容器需按上面的命令重新创建。Compose 配置解析通过或容器健康检查通过，都不能单独证明 SINDI 建索引成功；还需连接服务实际运行 BGE-M3 建索引。
 
 ## 对一条问题执行问答
 
-最直接的入口是 [`generation.pipeline.ask`](generation/pipeline.py)：传入已完成的 index manifest、问题和输出目录，依次运行检索、重排和生成。也可打开 [`generation/rag_demo.ipynb`](generation/rag_demo.ipynb) 逐阶段检查候选、证据和答案；notebook 不会建索引。
+最直接的入口是 [`generation.pipeline.ask`](generation/pipeline.py)：传入已完成的 index manifest、问题和输出目录，依次运行检索、重排和生成。
+
+Notebook 练习入口是根目录的 [`financial_rag_assignment_8_questions.ipynb`](financial_rag_assignment_8_questions.ipynb)。它通过 `generation.exercises.RAGPipeline` 提供八道题，练习检索、重排、证据选择、提示词预览和答案生成，并包含 Qwen3 与 BGE-M3 对比扩展。先完成建库，再配置 `PROJECT_ROOT` 和 `INDEX_MANIFESTS` 中对应模型的 manifest 路径；notebook 不会建索引。练习默认留空，每题附可展开的示例解法。`USE_REFERENCE_SOLUTIONS` 和 `SEND_API_REQUESTS` 默认均为 `False`；需要生成答案时，配置聊天接口并启用 `SEND_API_REQUESTS`。
 
 ```bash
 # export MILVUS_URI=http://YOUR_MILVUS_HOST:19530  # 连接远程服务时设置

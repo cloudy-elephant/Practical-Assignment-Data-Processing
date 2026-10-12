@@ -1,4 +1,12 @@
-"""Build isolated Milvus collections from completed embedding artifacts."""
+"""Build isolated Milvus collections from completed embedding artifacts.
+
+The segment index-building threshold is a Milvus server setting. The main
+local Compose file directly mounts milvus3-local/user.yaml, which lowers the
+default 1024 rows to 1 row per segment for this assignment's small document
+corpus and sets dataCoord.targetVecIndexVersion to 10 for BGE-M3 SINDI.
+The --target-vec-index-version flag records an operator-confirmed setting;
+it neither changes nor automatically verifies the server configuration.
+"""
 
 from __future__ import annotations
 
@@ -194,6 +202,7 @@ def _verify_schema(client, plan: dict) -> dict:
 
 
 def _verify_indexes(client, plan: dict, *, wait_seconds: int = 120) -> dict:
+    """Verify API-reported configuration and progress, not physical index files."""
     deadline = time.monotonic() + wait_seconds
     while True:
         descriptions = {}
@@ -210,7 +219,7 @@ def _verify_indexes(client, plan: dict, *, wait_seconds: int = 120) -> dict:
             if state in {"Failed", "IndexStateFailed"}:
                 raise ValueError(f"Index {field} failed: {description}")
             if "indexed_rows" not in description:
-                raise ValueError(f"Milvus did not report indexed_rows for {field}; physical index cannot be verified")
+                raise ValueError(f"Milvus did not report indexed_rows for {field}; index progress cannot be verified")
             if field == "learned_sparse" and "index_version" in description and int(description["index_version"]) < 10:
                 raise ValueError("Learned sparse index is on an older physical index version")
             if (state not in {"Finished", "IndexStateFinished"}
@@ -298,7 +307,7 @@ def main() -> None:
     parser.add_argument("--hnsw-m", type=int, default=16)
     parser.add_argument("--hnsw-ef-construction", type=int, default=200)
     parser.add_argument("--target-vec-index-version", type=int,
-                        help="Confirmed server dataCoord.targetVecIndexVersion (>=10 for SINDI)")
+                        help="Operator-confirmed server dataCoord.targetVecIndexVersion (>=10 for SINDI); does not set or verify server configuration")
     parser.add_argument("--dry-run", action="store_true", help="Validate artifact and print collection/index plan")
     args = parser.parse_args()
     result = build_index(args.embeddings_jsonl, args.output_dir,

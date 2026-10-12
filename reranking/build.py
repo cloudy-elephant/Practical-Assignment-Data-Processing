@@ -35,6 +35,14 @@ def _read_trace(path: Path) -> tuple[dict, str]:
     if (manifest.get("status") != "complete" or manifest.get("collection") != trace["collection"]
             or manifest.get("model_id") != trace["model_id"] or manifest.get("model_revision") != trace["model_revision"]):
         raise ValueError("Retrieval trace and index manifest disagree")
+    for source in trace.get("subquery_traces", []):
+        raw_query = Path(source["trace_path"]).read_bytes()
+        if sha256(raw_query).hexdigest() != source["trace_sha256"]:
+            raise ValueError("Sub-query trace checksum differs from merged retrieval trace")
+        query = json.loads(raw_query)
+        if (query.get("question") != source["question"] or query.get("collection") != trace["collection"]
+                or query.get("index_manifest_sha256") != trace["index_manifest_sha256"]):
+            raise ValueError("Sub-query trace and merged retrieval trace disagree")
     candidates = trace.get("fused_candidates")
     if not isinstance(candidates, list) or len(candidates) > trace["candidate_limit"]:
         raise ValueError("Invalid fused candidate list")

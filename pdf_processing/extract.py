@@ -1,7 +1,6 @@
 """Structured PDF extraction adapted from DSTA's PyMuPDF/OCR converters.
 
-The upstream implementation lives in
-``dsta-assignment/assignment_1/assignment_1_1``. This adapter preserves its
+This module is self-contained and preserves the original
 page/paragraph/line hierarchy and boxes while adding stable IDs, empty-page
 handling, and per-page OCR fallback for the new pipeline.
 """

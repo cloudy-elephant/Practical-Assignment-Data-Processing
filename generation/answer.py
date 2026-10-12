@@ -68,32 +68,65 @@ def _messages(question: str, evidence: list[dict]) -> list[dict]:
     ]
 
 
+def prepare_answer(reranking_trace_path: str | Path, *, question: str | None = None,
+                   chunk_ids: list[str] | None = None,
+                   max_context_chars: int | None = None) -> dict:
+    """Build the same validated evidence and messages used by generation/preview."""
+    trace, trace_sha = _read_evidence(Path(reranking_trace_path))
+    question = trace["question"] if question is None else question
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question must be nonempty")
+    evidence = trace["selected_evidence"]
+    if chunk_ids is not None:
+        mapping = {item["chunk_id"]: item for item in evidence}
+        if len(set(chunk_ids)) != len(chunk_ids) or any(cid not in mapping for cid in chunk_ids):
+            raise ValueError("chunk_ids must be unique IDs from the reranked selected evidence")
+        evidence = [mapping[cid] for cid in chunk_ids]
+    messages = _messages(question.strip(), evidence)
+    if max_context_chars is not None:
+        if max_context_chars <= 0:
+            raise ValueError("max_context_chars must be positive")
+        if len(messages[1]["content"]) > max_context_chars:
+            raise ValueError("Question and evidence exceed the character budget; reselect chunks")
+    return {"trace": trace, "trace_sha256": trace_sha, "question": question.strip(),
+            "selected_evidence": evidence, "messages": messages}
+
+
 def generate(reranking_trace_path: str | Path, output_dir: str | Path, *,
              model: str | None = None, base_url: str | None = None,
              api_key: str | None = None, temperature: float = 0,
-             client=None) -> dict:
+             question: str | None = None, chunk_ids: list[str] | None = None,
+             max_context_chars: int | None = None,
+             expected_messages: list[dict] | None = None, client=None) -> dict:
     """Generate a grounded answer from selected evidence and persist its trace."""
     source = Path(reranking_trace_path)
-    trace, trace_sha = _read_evidence(source)
-    question = trace["question"].strip()
-    if not question:
-        raise ValueError("Reranking trace has no question")
+    prepared = prepare_answer(source, question=question, chunk_ids=chunk_ids,
+                              max_context_chars=max_context_chars)
+    if expected_messages is not None and prepared["messages"] != expected_messages:
+        raise ValueError("Generation messages differ from the preview; rebuild the prompt")
+    trace, trace_sha = prepared["trace"], prepared["trace_sha256"]
+    question = prepared["question"]
     model = model or os.environ.get("RAG_CHAT_MODEL")
     if not model:
         raise ValueError("Set RAG_CHAT_MODEL or pass model")
     base_url = base_url or os.environ.get("RAG_CHAT_BASE_URL")
     api_key = api_key or os.environ.get("RAG_CHAT_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if client is None:
-        from openai import OpenAI
-
-        if not api_key and not base_url:
-            raise ValueError("Set RAG_CHAT_API_KEY (or OPENAI_API_KEY) for the chat endpoint")
-        client = OpenAI(api_key=api_key or "EMPTY", base_url=base_url) if base_url else OpenAI(api_key=api_key)
-    evidence = trace["selected_evidence"]
+    evidence = prepared["selected_evidence"]
     started = monotonic()
     if evidence:
-        response = client.chat.completions.create(model=model, messages=_messages(question, evidence),
-                                                  temperature=temperature)
+        owned_client = client is None
+        if owned_client:
+            from openai import OpenAI
+
+            if not api_key and not base_url:
+                raise ValueError("Set RAG_CHAT_API_KEY (or OPENAI_API_KEY) for the chat endpoint")
+            client = OpenAI(api_key=api_key or "EMPTY", base_url=base_url)
+        try:
+            response = client.chat.completions.create(model=model, messages=prepared["messages"],
+                                                      temperature=temperature)
+        finally:
+            if owned_client:
+                client.close()
         content = response.choices[0].message.content
         if not isinstance(content, str) or not content.strip():
             raise ValueError("Chat endpoint returned an empty answer")
@@ -117,6 +150,7 @@ def generate(reranking_trace_path: str | Path, output_dir: str | Path, *,
     result = {
         "schema_version": SCHEMA_VERSION, "status": "complete", "stage": "generation",
         "question": question, "answer": answer, "citations": citations,
+        "retrieval_question": trace["question"], "messages": prepared["messages"],
         "insufficient_evidence": not cited_numbers,
         "collection": trace["collection"], "model": model, "base_url": base_url,
         "temperature": temperature, "token_usage": token_usage,
@@ -128,6 +162,7 @@ def generate(reranking_trace_path: str | Path, output_dir: str | Path, *,
         "selected_evidence": evidence, "elapsed_seconds": monotonic() - started,
     }
     identity = sha256(_canonical({"reranking_trace_sha256": trace_sha, "model": model,
+                                  "question": question, "chunk_ids": [e["chunk_id"] for e in evidence],
                                   "temperature": temperature})).hexdigest()[:16]
     destination = Path(output_dir) / trace["collection"] / f"{identity}_{time_ns()}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)

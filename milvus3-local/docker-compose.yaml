@@ -1,5 +1,3 @@
-version: '3.5'
-
 x-milvus-image: &milvus-image milvusdb/milvus:v3.0.2
 
 services:
@@ -74,6 +72,8 @@ services:
       MINIO_ADDRESS: minio:9000
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+      # Keep server settings in the main file so explicit -f commands load them.
+      - ./user.yaml:/milvus/configs/user.yaml:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s

@@ -1,8 +1,10 @@
 # PDF preprocessing
 
-`extract.py` and `ocr.py` adapt the PyMuPDF and Tesseract workflow in
-`dsta-assignment/assignment_1/assignment_1_1`. This package provides the first
-stage of `assignment-pipeline-design.md`; it does not perform chunking or indexing.
+[`extract.py`](extract.py) and [`ocr.py`](ocr.py) adapt the PyMuPDF and Tesseract
+workflow from the earlier DSTA Assignment 1.1 exercise. This package provides
+the first stage of [the pipeline design](../assignment-pipeline-design.md);
+it does not perform chunking or indexing. Input samples are included in
+[`data/`](../data/README.md).
 
 Run from the repository root with the `assignment` Conda environment:
 
