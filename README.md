@@ -304,12 +304,6 @@ Artifacts include upstream paths and checksums to detect mismatched data or conf
 
 ## Validation and troubleshooting
 
-```bash
-python -m pytest tests
-```
-
-Tests mainly cover stage logic and mocked dependencies. Passing them does not mean the code has connected to a real Milvus service, run every model, or called a chat endpoint. A full deployment check should build an index from a real PDF, ask at least one question, and inspect `index_manifest_path`, `answer_path`, and the PDF pages referenced by the citations.
-
 - **OCR fails:** Check that the Tesseract executable and English language data are installed. For digital PDFs, try `--ocr never` first.
 - **BGE-M3 fails to load:** Check that PyTorch is at least 2.6 and the weights are accessible. The local Intel macOS CPU dependency setup does not meet the current loading requirement.
 - **Index construction fails:** Check `MILVUS_URI`, the Milvus 3.x version, and server capacity. For BGE-M3, also confirm the server index version needed by SINDI. A `--dry-run` result does not mean an index was actually built.

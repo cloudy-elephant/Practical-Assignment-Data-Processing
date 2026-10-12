@@ -303,12 +303,6 @@ python -m generation.answer PATH/TO/reranking_trace.json generation_traces
 
 ## 验证与常见问题
 
-```bash
-python -m pytest tests
-```
-
-测试主要覆盖阶段逻辑和模拟依赖；通过测试不代表已连接真实 Milvus、运行全部模型或调用聊天服务。完整部署应至少用真实 PDF 建库并问一条问题，核对 `index_manifest_path`、`answer_path` 和引用所指的 PDF 页码。
-
 - **OCR 报错：** 检查 Tesseract 可执行文件及英文语言数据；电子 PDF 可先用 `--ocr never`。
 - **BGE-M3 无法加载：** 检查 PyTorch 是否 ≥ 2.6，以及权重是否可访问；Intel macOS 本地 CPU 依赖设置不满足当前加载要求。
 - **索引构建失败：** 检查 `MILVUS_URI`、Milvus 3.x 版本和服务资源；BGE-M3 还需确认 SINDI 所需的服务端索引版本。`--dry-run` 不代表实际建库成功。
